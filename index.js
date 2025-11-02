@@ -95,37 +95,49 @@ io.on('connection', (socket) => {
       });
     });
 
-    // (BƯỚC 16.1) "Nâng cấp" hàm 'disconnect' (Sửa lỗi)
+    // (BƯỚC 23) "Nâng cấp" hàm 'disconnect' (Hoàn chỉnh)
     socket.on('disconnect', () => {
-      // (BƯỚC 16.1) Chúng ta sẽ lặp (iterate) qua 'rooms' (bộ nhớ)
-      // để tìm xem socket.id này có phải là Streamer không.
-      
       let disconnectedRoom = null;
-      
-      // Lặp qua Map: [ 'Wang vip 13', { pass: '...', streamerSocketId: '1zF...' } ]
+      let isStreamer = false;
+
+      // 1. Kiểm tra xem có phải là Streamer không
       for (const [roomName, roomData] of rooms.entries()) {
         if (roomData.streamerSocketId === socket.id) {
-          // Đã tìm thấy! socket.id này chính là Streamer của phòng 'roomName'
           disconnectedRoom = roomName;
-          break; // Dừng lặp
+          isStreamer = true;
+          break;
         }
       }
 
-      // Xử lý kết quả
-      if (disconnectedRoom) {
-        // (BƯNORMAL) ĐÂY LÀ STREAMER
-        // Xóa phòng này khỏi "bộ nhớ"
+      // 2. Nếu KHÔNG phải là Streamer, tìm xem là Viewer của phòng nào
+      if (!isStreamer) {
+        for (const room of socket.rooms) {
+          if (room !== socket.id) {
+            disconnectedRoom = room;
+            break;
+          }
+        }
+      }
+      
+      // 3. Xử lý
+      if (isStreamer && disconnectedRoom) {
+        // (A) ĐÂY LÀ STREAMER
+        // 3A.1. Xóa phòng khỏi "bộ nhớ"
         rooms.delete(disconnectedRoom);
-        console.log(`[Socket.IO] Streamer phòng '${disconnectedRoom}' (ID: ${socket.id}) đã ngắt kết nối. Đã XÓA phòng khỏi bộ nhớ.`);
+        console.log(`[Socket.IO] Streamer phòng '${disconnectedRoom}' (ID: ${socket.id}) đã ngắt kết nối. Đã XÓA phòng.`);
         
-        // (Sẽ làm ở bước sau)
-        // Thông báo cho tất cả Viewer (nếu có) trong phòng này
-        // socket.to(disconnectedRoom).emit('streamer-disconnected');
+        // 3A.2. (MỚI) BÁO cho TẤT CẢ Viewer trong phòng đó
+        socket.to(disconnectedRoom).emit('streamer-disconnected');
         
+      } else if (disconnectedRoom) {
+        // (B) ĐÂY LÀ VIEWER
+        console.log(`[Socket.IO] Một Viewer (ID: ${socket.id}) của phòng '${disconnectedRoom}' đã ngắt kết nối.`);
+        
+        // 3B.1. (MỚI) BÁO cho Streamer (chỉ Streamer)
+        socket.to(disconnectedRoom).emit('viewer-disconnected', socket.id);
       } else {
-        // (BƯNORMAL) ĐÂY LÀ VIEWER (hoặc ai đó chưa đăng ký)
-        // (Chúng ta không cần lặp qua socket.rooms nữa)
-        console.log(`[Socket.IO] Một Viewer (ID: ${socket.id}) đã ngắt kết nối.`);
+        // (C) KHÔNG AI CẢ
+        console.log(`[Socket.IO] Người dùng ${socket.id} (chưa vào phòng) đã ngắt kết nối.`);
       }
     });
 });
